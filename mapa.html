@@ -64,6 +64,14 @@
     () => alert("Não consegui pegar a sua localização."), { enableHighAccuracy: true, timeout: 10000 });
   const enviar = () => {
     const ll = pin.getLatLng();
+    const robo = q.get("b"), inicio = q.get("s");
+    if (robo && inicio) {
+      // botão dentro da mensagem: o ponto volta como /start <inicio>_<lat*1e6>_<lng*1e6>
+      const link = "https://t.me/" + robo + "?start=" + inicio + "_" + Math.round(ll.lat * 1e6) + "_" + Math.round(ll.lng * 1e6);
+      if (tg && tg.openTelegramLink) { tg.openTelegramLink(link); setTimeout(() => tg.close(), 400); }
+      else { location.href = link; }
+      return;
+    }
     const dados = JSON.stringify({ tipo: "viab", lat: +ll.lat.toFixed(7), lng: +ll.lng.toFixed(7) });
     if (tg && tg.sendData) { tg.sendData(dados); } else { alert("Ponto: " + ll.lat.toFixed(6) + ", " + ll.lng.toFixed(6)); }
   };
