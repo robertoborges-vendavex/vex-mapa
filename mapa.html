@@ -32,7 +32,7 @@
 <div id="mapa"></div>
 <div class="topo">
   📍 <b>Arraste o pin</b> (ou toque no mapa) até a <b>casa do cliente</b>.
-  <div class="leg">círculo = 300 m · nº = portas livres · toque na caixa para detalhes<br>
+  <div class="leg">círculo = 300 m (CTOs de fora aparecem ao arrastar) · nº = portas livres · toque na caixa para detalhes<br>
     <span class="bola" style="background:#f55203"></span>vazia<span class="bola" style="background:#008000"></span>até 25%<span class="bola" style="background:#163ba3"></span>até 60%<span class="bola" style="background:#FF0000"></span>quase cheia<span class="bola" style="background:#000"></span>lotada<span class="bola" style="background:#9c00bf"></span>projeto<span class="bola" style="background:#fff;border:2px solid #0a2a6b;width:7px;height:7px"></span>rede Blink</div>
 </div>
 <div class="botoes">
@@ -73,8 +73,16 @@
     if (oc <= 60) return "#163ba3";
     return "#FF0000";
   };
-  (q.get("c") || "").split(";").filter(Boolean).forEach((t, i) => {
-    const [la, ln, tipo, livres = "", total = "", nome = ""] = t.split(",");
+  // 24/11: z = CTOs compactas "dx,dy,tipo,livres,total,nome" (metros do ponto inicial, leste/norte), até 800 m.
+  // Só aparecem as do círculo de 300 m em volta do pin; ao arrastar, aparecem as do lugar novo e somem as que ficaram longe.
+  const RAIO = 300, M_GRAU = 111320, cosLat = Math.cos(ini[0] * Math.PI / 180);
+  const linhas = q.get("z") !== null
+    ? q.get("z").split(";").filter(Boolean).map(t => { const p = t.split(",");
+        return [String(ini[0] + (+p[1]) / M_GRAU), String(ini[1] + (+p[0]) / (M_GRAU * cosLat))].concat(p.slice(2)); })
+    : (q.get("c") || "").split(";").filter(Boolean).map(t => t.split(","));       // formato antigo (lat,lng,...)
+  const marcas = [];
+  linhas.forEach((campos, i) => {
+    const [la, ln, tipo, livres = "", total = "", nome = ""] = campos;
     const cor = corDa(tipo, livres, total);
     const num = tipo === "r" ? "P" : tipo === "b" ? "B" : (livres === "" ? "?" : String(livres).padStart(2, "0"));
     const fundo = tipo === "b" ? "#fff;border:2px solid #0a2a6b;box-sizing:border-box" : cor;   // rede Blink: vazada
@@ -87,12 +95,21 @@
     else txt += `${livres} porta(s) livre(s) de ${total}` + (+total > 0 ? ` · ${Math.round((+total - +livres) / +total * 100)}% ocupada` : "");
     const cl = clientes[String(i)];
     if (cl) txt += `<br><br>👥 <b>${cl.length} cliente(s) ativo(s):</b><ul>` + cl.map(e => `<li>${esc(e)}</li>`).join("") + "</ul>";
-    L.marker([+la, +ln], { icon: icone, zIndexOffset: -100 }).bindPopup(txt + "</div>").addTo(mapa);
+    marcas.push(L.marker([+la, +ln], { icon: icone, zIndexOffset: -100 }).bindPopup(txt + "</div>"));
   });
+  const mostrarPerto = ll => marcas.forEach(m => {
+    const dentro = mapa.distance(ll, m.getLatLng()) <= RAIO;
+    if (dentro && !mapa.hasLayer(m)) m.addTo(mapa);
+    else if (!dentro && mapa.hasLayer(m)) mapa.removeLayer(m);
+  });
+  mostrarPerto(L.latLng(ini));
+  let agendado = false;
+  const aoMover = ll => { if (agendado) return; agendado = true; requestAnimationFrame(() => { agendado = false; mostrarPerto(ll); }); };
   const pin = L.marker(ini, { draggable: true, autoPan: true }).addTo(mapa);
   const circ = L.circle(ini, { radius: 300, color: "#1b4fd1", weight: 2, fillOpacity: 0.06 }).addTo(mapa);
-  const mover = ll => { pin.setLatLng(ll); circ.setLatLng(ll); };
-  pin.on("drag", e => circ.setLatLng(e.target.getLatLng()));
+  const mover = ll => { pin.setLatLng(ll); circ.setLatLng(ll); mostrarPerto(L.latLng(ll)); };
+  pin.on("drag", e => { circ.setLatLng(e.target.getLatLng()); aoMover(e.target.getLatLng()); });
+  pin.on("dragend", e => mostrarPerto(e.target.getLatLng()));
   mapa.on("click", e => mover(e.latlng));
   document.getElementById("eu").onclick = () => navigator.geolocation && navigator.geolocation.getCurrentPosition(
     p => { const ll = [p.coords.latitude, p.coords.longitude]; mover(ll); mapa.setView(ll, 18); },
