@@ -19,14 +19,21 @@
   #confirmar { position: absolute; z-index: 1000; left: 8px; right: 8px; bottom: 16px; border: 0; border-radius: 12px;
                padding: 14px; font-size: 16px; font-weight: 600; color: #fff; background: #1f9d55; display: none; }
   .leg { font-size: 12px; color: #444; margin-top: 4px; }
-  .bola { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin: 0 3px 0 8px; vertical-align: middle; }
+  .bola { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin: 0 3px 0 6px; vertical-align: middle; }
+  /* CTO igual à tela de vendas: sempre do mesmo tamanho na tela, cor pela ocupação, portas livres no meio */
+  .cto { position: relative; width: 22px; height: 22px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,.45); }
+  .cto .num { position: absolute; left: 4px; top: 5px; width: 14px; height: 11px; background: #fff; border-radius: 2px;
+              font: 700 8px/11px Arial, sans-serif; text-align: center; }
+  .cto .pe { position: absolute; left: 9px; bottom: -5px; width: 4px; height: 5px; background: inherit; border-radius: 0 0 2px 2px; }
+  .pop b { color: #1b4fd1; } .pop ul { margin: 4px 0 0; padding-left: 16px; max-height: 180px; overflow-y: auto; }
 </style>
 </head>
 <body>
 <div id="mapa"></div>
 <div class="topo">
   📍 <b>Arraste o pin</b> (ou toque no mapa) até a <b>casa do cliente</b>.
-  <div class="leg">círculo = 300 m<span class="bola" style="background:#f59e0b"></span>CTO<span class="bola" style="background:#9c00bf"></span>projeto</div>
+  <div class="leg">círculo = 300 m · nº = portas livres · toque na caixa para detalhes<br>
+    <span class="bola" style="background:#f55203"></span>vazia<span class="bola" style="background:#008000"></span>até 25%<span class="bola" style="background:#163ba3"></span>até 60%<span class="bola" style="background:#FF0000"></span>quase cheia<span class="bola" style="background:#000"></span>lotada<span class="bola" style="background:#9c00bf"></span>projeto</div>
 </div>
 <div class="botoes">
   <button id="sat">🛰 Satélite</button>
@@ -49,10 +56,35 @@
     if (modoSat) { mapa.removeLayer(ruas); sat.addTo(mapa); } else { mapa.removeLayer(sat); ruas.addTo(mapa); }
     document.getElementById("sat").textContent = modoSat ? "🗺 Ruas" : "🛰 Satélite";
   };
-  (q.get("c") || "").split(";").filter(Boolean).forEach(t => {
-    const [la, ln, tipo] = t.split(",");
-    L.circleMarker([+la, +ln], { radius: 7, weight: 2, color: "#fff", fillOpacity: 1,
-                                fillColor: tipo === "r" ? "#9c00bf" : "#f59e0b" }).addTo(mapa);
+  // CTOs: "lat,lng,tipo,livres,total,nome" (tipo a = implantada, r = projeto). Clientes (só VEX): k = "i:end|end~i:..."
+  const clientes = {};
+  (q.get("k") || "").split("~").filter(Boolean).forEach(t => {
+    const p = t.indexOf(":"); clientes[t.slice(0, p)] = t.slice(p + 1).split("|").filter(Boolean);
+  });
+  const esc = t => String(t || "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const corDa = (tipo, livres, total) => {
+    if (tipo === "r") return "#9c00bf";
+    if (livres === "" || total === "" || +total <= 0) return livres === "0" ? "#000000" : "#8a8a8a";
+    if (+livres <= 0) return "#000000";
+    const oc = (+total - +livres) / +total * 100;
+    if (oc <= 0) return "#f55203";
+    if (oc <= 25) return "#008000";
+    if (oc <= 60) return "#163ba3";
+    return "#FF0000";
+  };
+  (q.get("c") || "").split(";").filter(Boolean).forEach((t, i) => {
+    const [la, ln, tipo, livres = "", total = "", nome = ""] = t.split(",");
+    const cor = corDa(tipo, livres, total);
+    const num = tipo === "r" ? "P" : (livres === "" ? "?" : String(livres).padStart(2, "0"));
+    const icone = L.divIcon({ className: "", iconSize: [22, 27], iconAnchor: [11, 27], popupAnchor: [0, -26],
+      html: `<div class="cto" style="background:${cor}"><div class="num" style="color:${cor}">${num}</div><div class="pe"></div></div>` });
+    let txt = `<div class="pop"><b>${esc(nome || "CTO")}</b><br>`;
+    if (tipo === "r") txt += "Projeto (ainda não implantada)";
+    else if (livres === "") txt += "Portas: não consultadas agora";
+    else txt += `${livres} porta(s) livre(s) de ${total}` + (+total > 0 ? ` · ${Math.round((+total - +livres) / +total * 100)}% ocupada` : "");
+    const cl = clientes[String(i)];
+    if (cl) txt += `<br><br>👥 <b>${cl.length} cliente(s) ativo(s):</b><ul>` + cl.map(e => `<li>${esc(e)}</li>`).join("") + "</ul>";
+    L.marker([+la, +ln], { icon: icone, zIndexOffset: -100 }).bindPopup(txt + "</div>").addTo(mapa);
   });
   const pin = L.marker(ini, { draggable: true, autoPan: true }).addTo(mapa);
   const circ = L.circle(ini, { radius: 300, color: "#1b4fd1", weight: 2, fillOpacity: 0.06 }).addTo(mapa);
