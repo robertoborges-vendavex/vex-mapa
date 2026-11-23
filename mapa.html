@@ -33,7 +33,7 @@
 <div class="topo">
   📍 <b>Arraste o pin</b> (ou toque no mapa) até a <b>casa do cliente</b>.
   <div class="leg">círculo = 300 m · nº = portas livres · toque na caixa para detalhes<br>
-    <span class="bola" style="background:#f55203"></span>vazia<span class="bola" style="background:#008000"></span>até 25%<span class="bola" style="background:#163ba3"></span>até 60%<span class="bola" style="background:#FF0000"></span>quase cheia<span class="bola" style="background:#000"></span>lotada<span class="bola" style="background:#9c00bf"></span>projeto</div>
+    <span class="bola" style="background:#f55203"></span>vazia<span class="bola" style="background:#008000"></span>até 25%<span class="bola" style="background:#163ba3"></span>até 60%<span class="bola" style="background:#FF0000"></span>quase cheia<span class="bola" style="background:#000"></span>lotada<span class="bola" style="background:#9c00bf"></span>projeto<span class="bola" style="background:#fff;border:2px solid #0a2a6b;width:7px;height:7px"></span>rede Blink</div>
 </div>
 <div class="botoes">
   <button id="sat">🛰 Satélite</button>
@@ -64,6 +64,7 @@
   const esc = t => String(t || "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const corDa = (tipo, livres, total) => {
     if (tipo === "r") return "#9c00bf";
+    if (tipo === "b") return "#0a2a6b";
     if (livres === "" || total === "" || +total <= 0) return livres === "0" ? "#000000" : "#8a8a8a";
     if (+livres <= 0) return "#000000";
     const oc = (+total - +livres) / +total * 100;
@@ -75,11 +76,13 @@
   (q.get("c") || "").split(";").filter(Boolean).forEach((t, i) => {
     const [la, ln, tipo, livres = "", total = "", nome = ""] = t.split(",");
     const cor = corDa(tipo, livres, total);
-    const num = tipo === "r" ? "P" : (livres === "" ? "?" : String(livres).padStart(2, "0"));
+    const num = tipo === "r" ? "P" : tipo === "b" ? "B" : (livres === "" ? "?" : String(livres).padStart(2, "0"));
+    const fundo = tipo === "b" ? "#fff;border:2px solid #0a2a6b;box-sizing:border-box" : cor;   // rede Blink: vazada
     const icone = L.divIcon({ className: "", iconSize: [22, 27], iconAnchor: [11, 27], popupAnchor: [0, -26],
-      html: `<div class="cto" style="background:${cor}"><div class="num" style="color:${cor}">${num}</div><div class="pe"></div></div>` });
-    let txt = `<div class="pop"><b>${esc(nome || "CTO")}</b><br>`;
+      html: `<div class="cto" style="background:${fundo}"><div class="num" style="color:${cor}${tipo === "b" ? ";left:2px;top:3px" : ""}">${num}</div><div class="pe" style="background:${cor}"></div></div>` });
+    let txt = `<div class="pop"><b>${tipo === "b" ? "🔷 REDE BLINK · " : ""}${esc(nome || "CTO")}</b><br>`;
     if (tipo === "r") txt += "Projeto (ainda não implantada)";
+    else if (tipo === "b") txt += "CTO da rede neutra da Blink";
     else if (livres === "") txt += "Portas: não consultadas agora";
     else txt += `${livres} porta(s) livre(s) de ${total}` + (+total > 0 ? ` · ${Math.round((+total - +livres) / +total * 100)}% ocupada` : "");
     const cl = clientes[String(i)];
